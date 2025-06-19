@@ -1,0 +1,33 @@
+# Docker volumes and data
+postgres_data/
+nominatim_data/
+nominatim_import/
+osrm_data/
+tegola_cache/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+
+# Environment files
+.env
+.env.local
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+
+# Backup files
+*.bak
+*.backup 

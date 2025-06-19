@@ -1,0 +1,334 @@
+
+
+services:
+  # PostgreSQL database for Nominatim (Optimized for high throughput)
+  postgres:
+    image: postgres:15
+    container_name: nominatim-postgres
+    environment:
+      POSTGRES_DB: nominatim
+      POSTGRES_USER: nominatim
+      POSTGRES_PASSWORD: nominatim
+      # High-performance PostgreSQL settings for IoT workloads
+      POSTGRES_SHARED_BUFFERS: 4GB
+      POSTGRES_EFFECTIVE_CACHE_SIZE: 32GB
+      POSTGRES_WORK_MEM: 256MB
+      POSTGRES_MAINTENANCE_WORK_MEM: 2GB
+      POSTGRES_AUTOVACUUM_WORK_MEM: 1GB
+      POSTGRES_SYNCHRONOUS_COMMIT: "off"
+      POSTGRES_WAL_BUFFERS: 64MB
+      POSTGRES_CHECKPOINT_SEGMENTS: 200
+      POSTGRES_CHECKPOINT_COMPLETION_TARGET: 0.9
+      POSTGRES_DEFAULT_STATISTICS_TARGET: 500
+      POSTGRES_RANDOM_PAGE_COST: 1.1
+      POSTGRES_EFFECTIVE_IO_CONCURRENCY: 400
+      POSTGRES_MAINTENANCE_IO_CONCURRENCY: 400
+      POSTGRES_SHARED_PRELOAD_LIBRARIES: "pg_stat_statements,pg_stat_monitor"
+      POSTGRES_MAX_WAL_SIZE: 4GB
+      POSTGRES_MIN_WAL_SIZE: 2GB
+      POSTGRES_MAX_WORKER_PROCESSES: 16
+      POSTGRES_MAX_PARALLEL_WORKERS_PER_GATHER: 8
+      POSTGRES_MAX_PARALLEL_WORKERS: 16
+      POSTGRES_MAX_PARALLEL_MAINTENANCE_WORKERS: 8
+      POSTGRES_MAX_CONNECTIONS: 500
+      POSTGRES_MAX_FILES_PER_PROCESS: 1000
+      POSTGRES_FSYC: "off"
+      POSTGRES_FULL_PAGE_WRITES: "off"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nominatim"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+        reservations:
+          memory: 8G
+
+  # PgBouncer for connection pooling
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: pgbouncer
+    environment:
+      DB_HOST: postgres
+      DB_USER: nominatim
+      DB_PASSWORD: nominatim
+      DB_NAME: nominatim
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 100
+      RESERVE_POOL_SIZE: 50
+      RESERVE_POOL_TIMEOUT: 5
+      MAX_DB_CONNECTIONS: 200
+      MAX_USER_CONNECTIONS: 100
+      SERVER_RESET_QUERY: DISCARD ALL
+      SERVER_CHECK_QUERY: SELECT 1
+      SERVER_CHECK_DELAY: 30
+      IDLE_TRANSACTION_TIMEOUT: 0
+      CLIENT_TLS_SSLMODE: disable
+    ports:
+      - "6432:5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U nominatim"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nominatim instances for load balancing (Multiple instances)
+  nominatim-1:
+    image: mediagis/nominatim:4.3
+    container_name: nominatim-1
+    environment:
+      PBF_URL: https://download.geofabrik.de/asia/gcc-states-latest.osm.pbf
+      REPLICATION_URL: https://download.geofabrik.de/asia/gcc-states-updates/
+      IMPORT_WIKIPEDIA: "false"
+      IMPORT_US_POSTCODES: "false"
+      NOMINATIM_PASSWORD: nominatim
+      # Use PgBouncer for connection pooling
+      POSTGRES_HOST: pgbouncer
+      POSTGRES_PORT: 5432
+      # Nominatim performance settings
+      NOMINATIM_THREADS: 8
+      NOMINATIM_LOOKUP_MAX_COUNT: 50
+      NOMINATIM_SEARCH_MAX_COUNT: 50
+      NOMINATIM_REVERSE_MAX_COUNT: 50
+      NOMINATIM_DETAILED_MAX_COUNT: 50
+      NOMINATIM_DEATHS: 0
+      NOMINATIM_TERMINATION: 0
+      NOMINATIM_REAP_INTERVAL: 10
+      NOMINATIM_MAX_WORKER_PROCESSES: 8
+      NOMINATIM_MAX_WORKER_THREADS: 4
+      NOMINATIM_DATABASE_MODULE_PATH: /usr/lib/postgresql/14/lib
+      NOMINATIM_OSM2PGSQL_CACHE: 4096
+      NOMINATIM_OSM2PGSQL_NUM_PROCESSES: 8
+      NOMINATIM_OSM2PGSQL_DROP_INDEXES: "false"
+      NOMINATIM_OSM2PGSQL_KEEP_INDEXES: "true"
+      NOMINATIM_OSM2PGSQL_DISABLE_INDEXING: "false"
+      NOMINATIM_OSM2PGSQL_DISABLE_PARALLEL_INDEXING: "false"
+    volumes:
+      - nominatim_data:/var/lib/postgresql/14/main
+      - nominatim_import:/nominatim/import
+    ports:
+      - "8080:8080"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  nominatim-2:
+    image: mediagis/nominatim:4.3
+    container_name: nominatim-2
+    environment:
+      PBF_URL: https://download.geofabrik.de/asia/gcc-states-latest.osm.pbf
+      REPLICATION_URL: https://download.geofabrik.de/asia/gcc-states-updates/
+      IMPORT_WIKIPEDIA: "false"
+      IMPORT_US_POSTCODES: "false"
+      NOMINATIM_PASSWORD: nominatim
+      # Use PgBouncer for connection pooling
+      POSTGRES_HOST: pgbouncer
+      POSTGRES_PORT: 5432
+      # Nominatim performance settings
+      NOMINATIM_THREADS: 8
+      NOMINATIM_LOOKUP_MAX_COUNT: 50
+      NOMINATIM_SEARCH_MAX_COUNT: 50
+      NOMINATIM_REVERSE_MAX_COUNT: 50
+      NOMINATIM_DETAILED_MAX_COUNT: 50
+      NOMINATIM_DEATHS: 0
+      NOMINATIM_TERMINATION: 0
+      NOMINATIM_REAP_INTERVAL: 10
+      NOMINATIM_MAX_WORKER_PROCESSES: 8
+      NOMINATIM_MAX_WORKER_THREADS: 4
+      NOMINATIM_DATABASE_MODULE_PATH: /usr/lib/postgresql/14/lib
+      NOMINATIM_OSM2PGSQL_CACHE: 4096
+      NOMINATIM_OSM2PGSQL_NUM_PROCESSES: 8
+      NOMINATIM_OSM2PGSQL_DROP_INDEXES: "false"
+      NOMINATIM_OSM2PGSQL_KEEP_INDEXES: "true"
+      NOMINATIM_OSM2PGSQL_DISABLE_INDEXING: "false"
+      NOMINATIM_OSM2PGSQL_DISABLE_PARALLEL_INDEXING: "false"
+    volumes:
+      - nominatim_data:/var/lib/postgresql/14/main
+      - nominatim_import:/nominatim/import
+    ports:
+      - "8082:8080"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  nominatim-3:
+    image: mediagis/nominatim:4.3
+    container_name: nominatim-3
+    environment:
+      PBF_URL: https://download.geofabrik.de/asia/gcc-states-latest.osm.pbf
+      REPLICATION_URL: https://download.geofabrik.de/asia/gcc-states-updates/
+      IMPORT_WIKIPEDIA: "false"
+      IMPORT_US_POSTCODES: "false"
+      NOMINATIM_PASSWORD: nominatim
+      # Use PgBouncer for connection pooling
+      POSTGRES_HOST: pgbouncer
+      POSTGRES_PORT: 5432
+      # Nominatim performance settings
+      NOMINATIM_THREADS: 8
+      NOMINATIM_LOOKUP_MAX_COUNT: 50
+      NOMINATIM_SEARCH_MAX_COUNT: 50
+      NOMINATIM_REVERSE_MAX_COUNT: 50
+      NOMINATIM_DETAILED_MAX_COUNT: 50
+      NOMINATIM_DEATHS: 0
+      NOMINATIM_TERMINATION: 0
+      NOMINATIM_REAP_INTERVAL: 10
+      NOMINATIM_MAX_WORKER_PROCESSES: 8
+      NOMINATIM_MAX_WORKER_THREADS: 4
+      NOMINATIM_DATABASE_MODULE_PATH: /usr/lib/postgresql/14/lib
+      NOMINATIM_OSM2PGSQL_CACHE: 4096
+      NOMINATIM_OSM2PGSQL_NUM_PROCESSES: 8
+      NOMINATIM_OSM2PGSQL_DROP_INDEXES: "false"
+      NOMINATIM_OSM2PGSQL_KEEP_INDEXES: "true"
+      NOMINATIM_OSM2PGSQL_DISABLE_INDEXING: "false"
+      NOMINATIM_OSM2PGSQL_DISABLE_PARALLEL_INDEXING: "false"
+    volumes:
+      - nominatim_data:/var/lib/postgresql/14/main
+      - nominatim_import:/nominatim/import
+    ports:
+      - "8083:8080"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  # OSRM routing server (optimized for high throughput)
+  osrm:
+    image: osrm/osrm-backend:latest
+    container_name: osrm-routing
+    environment:
+      - OSRM_DATA_PATH=/data/gcc-states-latest.osrm
+      - OSRM_THREADS=8
+      - OSRM_MAX_TABLE_SIZE=8000
+      - OSRM_MAX_ALTERNATIVES=3
+    volumes:
+      - osrm_data:/data
+    ports:
+      - "5001:5000"
+    command: >
+      sh -c "
+        if [ -f /data/gcc-states-latest.osrm ]; then
+          echo 'Starting OSRM server with existing data...' &&
+          osrm-routed --algorithm mld --threads 8 --max-table-size 8000 /data/gcc-states-latest.osrm;
+        else
+          echo 'OSRM data not found. Please download and process GCC states OSM data manually.' &&
+          echo 'You can download from: https://download.geofabrik.de/asia/gcc-states-latest.osm.pbf' &&
+          echo 'Then run: osrm-extract, osrm-partition, osrm-customize' &&
+          sleep infinity;
+        fi
+      "
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "if [ -f /data/gcc-states-latest.osrm ]; then curl -f http://localhost:5000/route/v1/driving/55.2708,25.2048;55.2708,25.2049?overview=false; else exit 0; fi"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 300s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # OSM tile server (Tegola) - optimized config
+  tegola:
+    image: gospatial/tegola:latest
+    container_name: tegola-tileserver
+    command: ["serve", "--config", "/config/config.toml", "--log-level", "warn"]
+    volumes:
+      - ./tegola-config:/config
+      - tegola_cache:/cache
+    ports:
+      - "8081:8080"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/capabilities"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # Nginx reverse proxy (optimized for high throughput)
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - nominatim-1
+      - nominatim-2
+      - nominatim-3
+      - tegola
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+volumes:
+  postgres_data:
+  nominatim_data:
+  nominatim_import:
+  osrm_data:
+  tegola_cache:

@@ -1,0 +1,64 @@
+# Tegola configuration file
+[webserver]
+port = ":8080"
+
+# Cache configuration
+[cache]
+type = "file"
+basepath = "/cache"
+
+# Database configuration
+[[providers]]
+name = "postgis"
+type = "postgis"
+host = "postgres"
+port = 5432
+database = "nominatim"
+user = "nominatim"
+password = "nominatim"
+ssl_mode = "disable"
+max_connections = 100
+uri = "postgres://nominatim:nominatim@postgres:5432/nominatim?sslmode=disable"
+
+# OSM data layers
+[[maps]]
+name = "osm"
+attribution = "© OpenStreetMap contributors"
+bounds = [24.0, 44.0, 32.0, 60.0]  # GCC states bounds
+
+[[maps.layers]]
+provider_layer = "postgis.planet_osm_point"
+min_zoom = 0
+max_zoom = 20
+
+[[maps.layers]]
+provider_layer = "postgis.planet_osm_line"
+min_zoom = 0
+max_zoom = 20
+
+[[maps.layers]]
+provider_layer = "postgis.planet_osm_polygon"
+min_zoom = 0
+max_zoom = 20
+
+# Provider layers - simplified for Nominatim database
+[[providers.layers]]
+name = "planet_osm_point"
+geometry_fieldname = "way"
+id_fieldname = "osm_id"
+geometry_type = "POINT"
+sql = "SELECT osm_id, way, name, amenity, shop, tourism FROM planet_osm_point WHERE way && !BBOX! AND name IS NOT NULL"
+
+[[providers.layers]]
+name = "planet_osm_line"
+geometry_fieldname = "way"
+id_fieldname = "osm_id"
+geometry_type = "LINESTRING"
+sql = "SELECT osm_id, way, name, highway, waterway FROM planet_osm_line WHERE way && !BBOX! AND (highway IS NOT NULL OR waterway IS NOT NULL)"
+
+[[providers.layers]]
+name = "planet_osm_polygon"
+geometry_fieldname = "way"
+id_fieldname = "osm_id"
+geometry_type = "POLYGON"
+sql = "SELECT osm_id, way, name, landuse, natural, building FROM planet_osm_polygon WHERE way && !BBOX! AND (landuse IS NOT NULL OR natural IS NOT NULL OR building IS NOT NULL)" 
