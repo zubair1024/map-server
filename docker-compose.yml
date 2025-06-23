@@ -1,5 +1,3 @@
-
-
 services:
   # PostgreSQL database for Nominatim (Optimized for high throughput)
   postgres:
@@ -282,7 +280,7 @@ services:
   tegola:
     image: gospatial/tegola:latest
     container_name: tegola-tileserver
-    command: ["serve", "--config", "/config/config.toml", "--log-level", "warn"]
+    command: ["serve", "--config", "/config/config.toml", "--log-level", "WARN"]
     volumes:
       - ./tegola-config:/config
       - tegola_cache:/cache
